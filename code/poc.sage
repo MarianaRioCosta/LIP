@@ -1,4 +1,3 @@
-# poc.sage
 # Test script for the PKE class defined in pke.sage
 
 from sage.all import *

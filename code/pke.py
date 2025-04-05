@@ -1,4 +1,3 @@
-# pke.sage
 # Implements the PKE class based on Protocol 1 (with simplifications)
 
 from sage.all import *
