@@ -16,21 +16,35 @@ except Exception as e:
 
 
 # --- Test Parameters ---
-n = 8        # Dimension / Security parameter
-r_int = 2    # Integer radius bound for error vectors (max component size)
-# Choose q large enough for recovery. q > 2*r_int needed.
-q = 101
+#n = 8        # Dimension / Security parameter
+#r = 2    # Integer radius bound for error vectors (max component size)
+# Choose q large enough for recovery. q > 2*r needed.
+#q = 101
+
+#FIX THIS
+lambda_n_S = 
+norm_BS_star = 
+
+n = int(input('Dimension: n = '))
+r = int(input('Integer radius bound for error vectors (max component size): r = '))
+s = max(lambda_n_S, norm_BS_star * math.sqrt(math.log(2*n+4)/math.pi))
+
+q =  math.ceil((s * n)/ r * math.sqrt(math.log(2 * n + 4) / math.pi))
+
+
 print("--- PKE Test Script ---")
-print(f"Parameters: n={n}, r_int={r_int}, q={q}")
-if q <= 2 * r_int:
-    print(f"Warning: q={q} might be too small relative to r_int={r_int}. Decryption might fail.")
+print(f"Parameters: n={n}, r={r}, q={q}")
+#FIX THIS
+#if s < max(n * lambda_n_S, norm_BS_star * sqrt(ln(2*n + 4)/pi)):
+#    print(f"Warning: s is too small. Decryption might fail.")
+#    exit()
 
 
 # --- Test Execution ---
 
 # 1. Instantiate the PKE
 try:
-    pke_instance = PKE(n, q, r_int)
+    pke_instance = PKE(n, q, r)
     print("\nPKE Instance created successfully.")
 except ValueError as e:
     print(f"\nError creating PKE instance: {e}")

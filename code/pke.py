@@ -1,6 +1,7 @@
-# Implements the PKE class based on Protocol 1 (with simplifications)
-
+# Implements the PKE class 
 from sage.all import *
+from sage.modules.free_module_integer import IntegerLattice
+
 import os
 import math
 import random # For Gaussian sampling and uniform sampling
@@ -24,42 +25,58 @@ def lift_to_small_integers(v_mod_q, modulus):
         v_lifted.append(val - q if val >= q_half_strict else val)
     return vector(ZZ, v_lifted)
 
-# --- PKE Class Definition ---
+def Babai_CVP(mat, target):
+	M = IntegerLattice(mat, lll_reduce=True).reduced_basis
+	G = M.gram_schmidt()[0]
+	diff = target
+	for i in reversed(range(G.nrows())):
+		diff -=  M[i] * ((diff * G[i]) / (G[i] * G[i])).round()
+	return target - diff
+
+def dec(S, vec):
+    return Babai_CVP(S, vec)
+
+
+# --- PKE Class Definition --- 
 
 class PKE:
     """
-    Public Key Encryption for bits {0, 1} based on Protocol 1.
-    Uses Dspr key generation and simplified encryption/decryption.
+    Public Key Encryption for bits {0, 1}
     """
-    def __init__(self, n, q, r_int):
+    def __init__(self, n, q, r):
         """
         Initializes the PKE scheme. Assumes S=Identity.
 
         Args:
             n (int): Dimension / Security parameter.
-            q (int): Modulus. Should be large enough relative to r_int (e.g., q > 2*r_int).
-            r_int (int): Integer radius bound for error vectors (max component size).
+            q (int): Modulus. Should be large enough relative to r (e.g., q > 2*r).
+            r (int): Integer radius bound for error vectors (max component size).
         """
         if not isinstance(q, (int, Integer)) or q <= 1:
             raise ValueError("Modulus q must be an integer > 1")
-        if not isinstance(r_int, (int, Integer)) or r_int < 0:
-            raise ValueError("r_int must be a non-negative integer")
-        if q <= 2 * r_int:
-             print(f"Warning: q={q} may be too small relative to r_int={r_int} for reliable decryption.")
+        if not isinstance(r, (int, Integer)) or r < 0:
+            raise ValueError("r must be a non-negative integer")
+        if q <= 2 * r:
+             print(f"Warning: q={q} may be too small relative to r={r} for reliable decryption.")
 
         self.n = n
         self.q = q
-        self.r_int = r_int # Decoding radius / error bound
-        self.S = identity_matrix(ZZ, n) # Base quadratic form (fixed)
+        self.r = r # Decoding radius / error bound
+
+        # sampling random quadratic forms
+        #A = 2*identity_matrix(ZZ, n)  + random_matrix(ZZ, n, x=10)
+        #self.S = (A.transpose() * A).change_ring(ZZ) 
+
+        self.S = 2 * identity_matrix(ZZ, n) # Base quadratic form (fixed)
         self.Zq = Integers(q) # Ring Z/qZ
 
     def keygen(self, max_retries=10):
         """
-        Generate Public Key (pk) and Secret Key (sk) using Dspr.
+        Generate Public Key (pk) and Secret Key (sk) using D_s.
         Ensures sk (U) is unimodular. pk = P, sk = U, where P = U^T S U.
         """
-        # --- Dspr Sampling Logic ---
-        print("Running KeyGen (using Dspr sampling)...")
+        # --- D_s Sampling Logic ---
+        print("Running KeyGen (using D_s sampling)...")
         n = self.n
         Q = self.S # Base form is S=I
         s = float(n)
@@ -100,8 +117,8 @@ class PKE:
                 print(f"  Error during basis extraction/LLL: {e}")
                 continue
         print(f"KeyGen failed after {max_retries} retries.")
-        raise RuntimeError("Failed to generate keys using Dspr after multiple attempts.")
-        # --- End Dspr Sampling Logic ---
+        raise RuntimeError("Failed to generate keys using D_s after multiple attempts.")
+        # --- End D_s Sampling Logic ---
 
     def encrypt(self, pk, message):
         """
@@ -110,7 +127,7 @@ class PKE:
         # P = pk # Public key isn't needed for simplified encryption sampling
         if message == 0:
             try:
-                e_list = [randint(-self.r_int, self.r_int) for _ in range(self.n)]
+                e_list = [randint(-self.r, self.r) for _ in range(self.n)]
                 e = vector(ZZ, e_list)
                 c = vector(self.Zq, e)
                 return c
@@ -135,12 +152,12 @@ class PKE:
         U = sk
         q = self.q
         Zq = self.Zq
-        r_int = self.r_int
+        r = self.r
 
-        if not isinstance(U, matrix.Matrix) or not U.is_square() or U.nrows() != self.n:
+        if not isinstance(U, type(matrix(ZZ, 1, 1))) or not U.is_square() or U.nrows() != self.n:
             print("Error: Invalid secret key format.")
             return -1
-        if not isinstance(c, (vector.Vector_integer_mod, vector.Vector_dense_mod)) or \
+        if not isinstance(c, (type(vector(GF(q), 1)), type(vector(GF(q), [0])))) or \
            c.base_ring() != Zq or c.length() != self.n:
             print("Error: Invalid ciphertext format.")
             return -1
@@ -157,13 +174,16 @@ class PKE:
 
         try:
             U_inv_mod_q = U_inv.change_ring(Zq)
-            z_mod_q = U_inv_mod_q * c
         except Exception as e:
              print(f"Error during matrix multiplication U_inv * c: {e}")
              return -1
 
-        z = lift_to_small_integers(z_mod_q, q)
-        is_small = all(abs(component) <= r_int for component in z)
+        y = dec(self.S, U*c)
+        z = c - U_inv_mod_q * y 
+        z = lift_to_small_integers(z, q)
+
+        is_small = norm(z) <= r 
+
 
         if is_small:
             return 0
